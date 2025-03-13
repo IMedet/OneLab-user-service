@@ -1,8 +1,7 @@
 package kz.medet.userservice.service.impl;
 
-import kz.medet.userservice.dto.CreateProductDto;
-import kz.medet.userservice.dto.OrderResponse;
-import kz.medet.userservice.dto.Product;
+import kz.medet.userservice.clients.OrderServiceClient;
+import kz.medet.userservice.dto.*;
 import kz.medet.userservice.entity.Customer;
 import kz.medet.userservice.entity.CustomerDocument;
 import kz.medet.userservice.exceptions.CustomException;
@@ -16,6 +15,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -30,18 +30,22 @@ public class CustomerService {
     private final KafkaConsumer kafkaConsumer;
     private final BlockingQueue blockingQueue;
 
+    private final OrderServiceClient orderServiceClient;
+
     private final CustomerSearchRepository customerSearchRepository;
 
     public CustomerService(CustomerRepository customerRepository,
                            KafkaProducer kafkaProducer,
                            KafkaConsumer kafkaConsumer,
                            BlockingQueue blockingQueue,
-                           CustomerSearchRepository customerSearchRepository) {
+                           CustomerSearchRepository customerSearchRepository,
+                           OrderServiceClient orderServiceClient) {
         this.customerRepository = customerRepository;
         this.kafkaProducer = kafkaProducer;
         this.kafkaConsumer = kafkaConsumer;
         this.blockingQueue = blockingQueue;
-        this.customerSearchRepository=customerSearchRepository;
+        this.customerSearchRepository = customerSearchRepository;
+        this.orderServiceClient = orderServiceClient;
     }
 
     @Transactional(readOnly = true, propagation = Propagation.REQUIRED)
@@ -65,22 +69,44 @@ public class CustomerService {
         customerSearchRepository.save(customerDocument);
     }
 
+//    @Transactional(propagation = Propagation.REQUIRED)
+//    public void addOrderToCustomer(Long customerId) {
+//        Customer customer = customerRepository.findById(customerId).orElseThrow(
+//                () -> new CustomException("The customer doesn't exist"));
+//
+//        kafkaProducer.sendMessage(customerId);
+//        String response;
+//        try {
+//            response = (String) blockingQueue.poll(15, TimeUnit.SECONDS);
+//            if (response==null){
+//                throw new CustomException("Timeout: No response from OrderService");
+//            }
+//        }catch (InterruptedException e){
+//            throw new CustomException(e.getMessage());
+//        }
+//        customer.setOrderId(Long.parseLong(response));
+//        customerRepository.save(customer);
+//
+//        customerSearchRepository.deleteById(customerId.toString());
+//        CustomerDocument customerDocument = new CustomerDocument();
+//        customerDocument.setId(customer.getId().toString());
+//        customerDocument.setFirstName(customer.getFirstName());
+//        customerDocument.setLastName(customer.getLastName());
+//        customerDocument.setOrderId(customer.getOrderId());
+//
+//        customerSearchRepository.save(customerDocument);
+//    }
+
     @Transactional(propagation = Propagation.REQUIRED)
     public void addOrderToCustomer(Long customerId) {
         Customer customer = customerRepository.findById(customerId).orElseThrow(
                 () -> new CustomException("The customer doesn't exist"));
 
         kafkaProducer.sendMessage(customerId);
-        String response;
-        try {
-            response = (String) blockingQueue.poll(15, TimeUnit.SECONDS);
-            if (response==null){
-                throw new CustomException("Timeout: No response from OrderService");
-            }
-        }catch (InterruptedException e){
-            throw new CustomException(e.getMessage());
-        }
-        customer.setOrderId(Long.parseLong(response));
+
+        orderServiceClient.createOrder(customerId);
+
+        customer.setOrderId(customerId);
         customerRepository.save(customer);
 
         customerSearchRepository.deleteById(customerId.toString());
@@ -93,35 +119,52 @@ public class CustomerService {
         customerSearchRepository.save(customerDocument);
     }
 
-    @Transactional(propagation = Propagation.REQUIRED)
-    public OrderResponse getCustomerOrders(Long customerId){
-        kafkaProducer.sendMessage2(customerId);
-        String response;
-        try {
-            response = (String) blockingQueue.poll(15, TimeUnit.SECONDS);
-            if (response==null){
-                throw new CustomException("Timeout: No response from OrderService");
-            }
-        }catch (InterruptedException e){
-            throw new CustomException(e.getMessage());
-        }
-        return kafkaConsumer.getOrderResponse(response);
+    @Transactional
+    public OrderDto getOrderOfCustomer(Long customerId){
+        return orderServiceClient.getOrderByCustomerId(customerId);
     }
 
+//    @Transactional(propagation = Propagation.REQUIRED)
+//    public OrderResponse getCustomerOrders(Long customerId) {
+//        kafkaProducer.sendMessage2(customerId);
+//        String response;
+//        try {
+//            response = (String) blockingQueue.poll(15, TimeUnit.SECONDS);
+//            if (response == null) {
+//                throw new CustomException("Timeout: No response from OrderService");
+//            }
+//        } catch (InterruptedException e) {
+//            throw new CustomException(e.getMessage());
+//        }
+//        return kafkaConsumer.getOrderResponse(response);
+//    }
+
+
     @Transactional(propagation = Propagation.REQUIRED)
-    public String addProductToOrder(Long orderId, String name, double price) {
-        kafkaProducer.sendMessage3(new CreateProductDto(orderId,name,price));
-        String response;
-        try {
-            response = (String) blockingQueue.poll(15, TimeUnit.SECONDS);
-            if (response==null){
-                throw new CustomException("Timeout: No response from OrderService");
-            }
-        }catch (InterruptedException e){
-            throw new CustomException(e.getMessage());
-        }
-        return response;
+    public void addProductToOrder(Long orderId, String product_name, double product_price) {
+        orderServiceClient.addProductToOrder(orderId, product_name, product_price);
     }
+
+
+    @Transactional
+    public List<ProductDto> getProductsOfOrder(Long orderId) {
+        return orderServiceClient.getProductsByOrderId(orderId);
+    }
+
+//    @Transactional(propagation = Propagation.REQUIRED)
+//    public String addProductToOrder(Long orderId, String name, double price) {
+//        kafkaProducer.sendMessage3(new CreateProductDto(orderId,name,price));
+//        String response;
+//        try {
+//            response = (String) blockingQueue.poll(15, TimeUnit.SECONDS);
+//            if (response==null){
+//                throw new CustomException("Timeout: No response from OrderService");
+//            }
+//        }catch (InterruptedException e){
+//            throw new CustomException(e.getMessage());
+//        }
+//        return response;
+//    }
 
     @Transactional(readOnly = true, propagation = Propagation.REQUIRED)
     public List<CustomerDocument> searchCustomers(String query) {

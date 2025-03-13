@@ -1,82 +1,72 @@
 package kz.medet.userservice.service.impl;
 
+import kz.medet.userservice.dto.UserDTO;
 import kz.medet.userservice.entity.User;
-import kz.medet.userservice.exceptions.CustomException;
-import kz.medet.userservice.repository.RoleRepository;
+import kz.medet.userservice.dto.ERole;
+import kz.medet.userservice.exceptions.UserExistException;
+import kz.medet.userservice.payload.request.SignUpRequest;
 import kz.medet.userservice.repository.UserRepository;
-import kz.medet.userservice.service.IUserService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-import java.util.Optional;
-
+import java.security.Principal;
 
 @Service
-@Slf4j
-@RequiredArgsConstructor
-public class UserService implements IUserService {
+public class UserService {
+    public static final Logger LOG = LoggerFactory.getLogger(UserService.class);
 
     private final UserRepository userRepository;
-    private final RoleRepository roleRepository;
+    private final BCryptPasswordEncoder bCryptPasswordEncoder;
 
-    public void register(String username, String password, String iin, String phoneNumber, String fio) {
-        Optional<User> existingUser = userRepository.findByUsername(username);
-        if (existingUser.isPresent()) {
-            throw new CustomException("Пользователь с таким именем уже существует!");
+    @Autowired
+    public UserService(UserRepository userRepository, BCryptPasswordEncoder bCryptPasswordEncoder) {
+        this.userRepository = userRepository;
+        this.bCryptPasswordEncoder = bCryptPasswordEncoder;
+    }
+
+    public User createUser(SignUpRequest userIn){
+        User user = new User();
+        user.setEmail(userIn.getEmail());
+        user.setName(userIn.getFirstname());
+        user.setLastname(userIn.getLastname());
+        user.setUsername(userIn.getUsername());
+        user.setPassword(bCryptPasswordEncoder.encode(userIn.getPassword()));
+        user.getRoles().add(ERole.ROLE_USER);
+
+        try{
+            LOG.info("Saving User {}", userIn.getEmail());
+            return userRepository.save(user);
+        }catch (Exception e){
+            LOG.error("Error during registration. {}", e.getMessage());
+            throw new UserExistException("The user " + user.getUsername() + " already exist. Please check credentials");
         }
-
-        User newUser = new User();
-        newUser.setUsername(username);
-        newUser.setPassword(password);
-        newUser.setIin(iin);
-        newUser.setPhoneNumber(phoneNumber);
-        newUser.setFio(fio);
-
-        userRepository.save(newUser);
-        System.out.println("Регистрация успешна!");
     }
 
-    public boolean login(String username, String password) {
-        Optional<User> userOptional = userRepository.findByUsername(username);
-        if (userOptional.isEmpty()) {
-            System.out.println("Ошибка: Пользователь не найден!");
-            return false;
-        }
+    public User updateUser(UserDTO userDTO, Principal principal){
+        User user = getUserByPrincipal(principal);
 
-        User user = userOptional.get();
-        if (!user.getPassword().equals(password)) {
-            System.out.println("Ошибка: Неверный пароль!");
-            return false;
-        }
+        user.setName(userDTO.getFirstname());
+        user.setLastname(userDTO.getLastname());
+        user.setBio(userDTO.getBio());
 
-        System.out.println("Успешный вход! Добро пожаловать, " + username);
-        return true;
+        return userRepository.save(user);
     }
 
-    @Override
-    public void delete(String username) {
-        userRepository.deleteByUsername(username);
+    public User getCurrentUser(Principal principal){
+        return getUserByPrincipal(principal);
     }
 
-    @Override
-    public User getUserById(Long id) {
-        return userRepository.findById(id).orElseThrow(() -> new CustomException("The user doesn't exist"));
+    public User getUserByPrincipal(Principal principal){
+        String username = principal.getName();
+
+        return userRepository.findUserByUsername(username).orElseThrow(()-> new UsernameNotFoundException("Username not found with username: " + username));
     }
 
-    @Override
-    public User getUserByIin(String iin) {
-        return userRepository.findByIin(iin).orElseThrow(() -> new CustomException("The user doesn't exist"));
-    }
-
-    @Override
-    public User getUserByUsername(String username) {
-        return userRepository.findByUsername(username).orElseThrow(() -> new CustomException("The user doesn't exist"));
-    }
-
-    @Override
-    public List<User> getAllUsers() {
-        return userRepository.findAll();
+    public User getUserById(Long userId) {
+        return userRepository.findById(userId).orElseThrow(()->new UsernameNotFoundException("User not found"));
     }
 }

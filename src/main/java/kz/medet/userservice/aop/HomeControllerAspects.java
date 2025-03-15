@@ -19,6 +19,7 @@ public class HomeControllerAspects {
 
     @AfterReturning(value = "execution(* kz.medet.userservice.controller.HomeController.*(..))", returning = "result")
     public void logAfterMethod(JoinPoint joinPoint, Object result) {
+
         log.info("Method completed: {} with return value: {}", joinPoint.getSignature().toShortString(), result);
     }
 }

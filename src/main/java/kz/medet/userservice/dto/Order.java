@@ -4,13 +4,14 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Getter;
 
 import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.List;
 
 
 @Getter
 public class Order {
     private Long id;
-    private Timestamp timeCreated;
+    private LocalDateTime timeCreated;
     private Long customerId;
 
     @JsonIgnore

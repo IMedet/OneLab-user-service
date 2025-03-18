@@ -1,9 +1,11 @@
 package kz.medet.userservice.controller;
 
 import kz.medet.userservice.clients.OrderServiceClient;
+import kz.medet.userservice.dto.CustomerResponseDto;
 import kz.medet.userservice.dto.OrderDto;
 import kz.medet.userservice.dto.ProductDto;
 import kz.medet.userservice.entity.Customer;
+import kz.medet.userservice.entity.CustomerDocument;
 import kz.medet.userservice.payload.response.MessageResponse;
 import kz.medet.userservice.service.impl.CustomerService;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +21,26 @@ import java.util.List;
 public class HomeController {
 
     private final CustomerService customerService;
+
+    @GetMapping("/filter")
+    public ResponseEntity<List<CustomerDocument>> filterCustomers(
+            @RequestParam(value = "query", required = false) String query,
+            @RequestParam(value = "orderId", required = false) Long orderId
+    ) {
+        List<CustomerDocument> filteredCustomers = customerService.filterCustomers(query, orderId);
+        return ResponseEntity.ok(filteredCustomers);
+    }
+
+    @GetMapping("/searchCustomers")
+    public ResponseEntity<List<CustomerResponseDto>> getAllCustomers(
+            @RequestParam(value = "nameQuery", required = false) String nameQuery,
+            @RequestParam(value = "orderId", required = false) Long orderId,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "10") int size) {
+
+        List<CustomerResponseDto> customers = customerService.getAllCustomer(nameQuery, orderId, page, size);
+        return ResponseEntity.ok(customers);
+    }
 
 
     @GetMapping("/customers")

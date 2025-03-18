@@ -10,5 +10,8 @@ import java.util.List;
 @Repository
 public interface CustomerSearchRepository extends ElasticsearchRepository<CustomerDocument,String> {
     List<CustomerDocument> findByFirstNameContainingOrLastNameContaining(String firstName, String lastName);
+    List<CustomerDocument> findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(String firstName, String lastName);
+    List<CustomerDocument> findAllByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(String firstName, String lastName);
+
 
 }

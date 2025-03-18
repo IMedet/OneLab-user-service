@@ -139,6 +139,11 @@
             <artifactId>spring-boot-starter-data-elasticsearch</artifactId>
             <version>3.3.0</version>
         </dependency>
+        <dependency>
+            <groupId>org.mapstruct</groupId>
+            <artifactId>mapstruct</artifactId>
+            <version>1.5.2.Final</version>
+        </dependency>
     </dependencies>
 
     <dependencyManagement>
